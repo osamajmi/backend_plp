@@ -7,13 +7,23 @@ const path = require('path');
 const productRoutes = require('../src/routes/products');
 
 const app = express();
+
+const allowedOrigins = [
+  "http://localhost:8080",                // Local frontend
+  "https://pl-pfrontend.vercel.app"       // Vercel frontend
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:8080",                 
-    "https://pl-pfrontend.vercel.app"       
-  ],
-  methods: ["GET", "POST", "PUT","PATCH", "DELETE"], 
-  credentials: true                         
+  origin: function(origin, callback){
+   
+    if(!origin) return callback(null, true);
+    if(allowedOrigins.indexOf(origin) === -1){
+      const msg = 'CORS policy does not allow access from this origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
 }));
 app.use(express.json());
 
