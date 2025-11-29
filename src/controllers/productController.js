@@ -1,8 +1,8 @@
 const Product = require('../models/Product');
-const { deleteFileIfExists } = require('../utils/multerUpload');
 const path = require('path');
+const cloudinary = require('../utils/cloudinary.js');
+const { deleteFileIfExists } = require('../utils/multerUpload.js');
 
-// GET /api/products  (unchanged)
 exports.listProducts = async (req, res) => {
   try {
     let { page = 1, limit = 10, search = "" } = req.query;
@@ -38,7 +38,6 @@ exports.listProducts = async (req, res) => {
   }
 };
 
-// GET /api/products/:id (unchanged)
 exports.getProduct = async (req, res) => {
   try {
     const p = await Product.findById(req.params.id);
@@ -49,49 +48,36 @@ exports.getProduct = async (req, res) => {
   }
 };
 
-// POST /api/products  (use req.file)
 exports.createProduct = async (req, res) => {
   try {
-    console.log("hit");
     const { title, description, price, rating } = req.body;
-    console.log(req.body);
-
     let image = null;
 
     if (req.file) {
-      // Save only relative path — not full system path
-      image = `uploads/${req.file.filename}`;
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'products',
+        fetch_format: 'auto',
+        quality: 'auto'
+      });
+      image = result.secure_url;
+      await deleteFileIfExists(req.file.path);
     } else if (req.body.image) {
       image = req.body.image;
     }
 
-    const product = new Product({
-      title,
-      description,
-      price,
-      rating,
-      image
-    });
-
+    const product = new Product({ title, description, price, rating, image });
     const saved = await product.save();
     res.status(201).json(saved);
-
   } catch (err) {
     res.status(400).json({ message: 'Create failed', error: err.message });
   }
 };
 
-// PUT /api/products/:id (handle file replacement)
 exports.updateProduct = async (req, res) => {
   try {
     const updates = { ...req.body };
+    if (req.file) updates.image = req.file.path;
 
-    // if a new file was uploaded, set updates.image and remove old file
-    if (req.file) {
-      updates.image = req.file.path;
-    }
-
-    // Find current product so we can remove old image if replaced
     const existing = await Product.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Product not found' });
 
@@ -101,9 +87,7 @@ exports.updateProduct = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    // If new file uploaded and existing.image exists -> delete old file
     if (req.file && existing.image && existing.image !== updates.image) {
-      // if existing.image is a URL (cloud) you might need to handle differently
       await deleteFileIfExists(existing.image);
     }
 
@@ -113,16 +97,12 @@ exports.updateProduct = async (req, res) => {
   }
 };
 
-// DELETE /api/products/:id 
 exports.deleteProduct = async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: 'Product not found' });
 
-    // delete image
-    if (deleted.image) {
-      await deleteFileIfExists(deleted.image);
-    }
+    if (deleted.image) await deleteFileIfExists(deleted.image);
 
     res.json({ message: 'Deleted', id: deleted._id });
   } catch (err) {
