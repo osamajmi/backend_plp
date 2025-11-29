@@ -1,23 +1,8 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs/promises');
+const cloudinary = require('./cloudinary'); // adjust path if needed
 
-const uploadsFolder = path.join(process.cwd(), 'uploads');
-
-(async () => {
-  try {
-    await fs.mkdir(uploadsFolder, { recursive: true });
-  } catch (err) {}
-})();
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsFolder),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const base = path.basename(file.originalname, ext).replace(/\s+/g, '-');
-    cb(null, `${file.fieldname}-${Date.now()}-${base}${ext}`);
-  }
-});
+// Use memory storage instead of disk storage
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -30,20 +15,27 @@ const upload = multer({
   }
 });
 
+// Delete function is now a no-op since files are never saved locally
 async function deleteFileIfExists(filePath) {
-  if (!filePath || /^https?:\/\//i.test(filePath)) return;
+  return;
+}
 
-  try {
-    const resolved = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(process.cwd(), filePath);
-    await fs.unlink(resolved);
-  } catch (err) {
-    if (err && err.code !== 'ENOENT') console.error('File delete error:', err);
-  }
+// Helper function to upload a buffer directly to Cloudinary
+async function uploadToCloudinary(fileBuffer, folder = 'products') {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, fetch_format: 'auto', quality: 'auto' },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    stream.end(fileBuffer);
+  });
 }
 
 module.exports = {
   upload,
   deleteFileIfExists,
+  uploadToCloudinary
 };
