@@ -7,7 +7,14 @@ const path = require('path');
 const productRoutes = require('../src/routes/products');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:8080",                 
+    "https://pl-pfrontend.vercel.app"       
+  ],
+  methods: ["GET", "POST", "PUT","PATCH", "DELETE"], 
+  credentials: true                         
+}));
 app.use(express.json());
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
