@@ -1,7 +1,10 @@
 const Product = require('../models/Product');
 const path = require('path');
 const cloudinary = require('../utils/cloudinary.js');
-const { deleteFileIfExists } = require('../utils/multerUpload.js');
+// const { deleteFileIfExists } = require('../utils/multerUpload.js');
+// const Product = require('../models/Product');
+const { uploadToCloudinary, deleteFileIfExists } = require('../utils/multerUpload');
+
 
 exports.listProducts = async (req, res) => {
   try {
@@ -53,16 +56,15 @@ exports.createProduct = async (req, res) => {
     const { title, description, price, rating } = req.body;
     let image = null;
 
-    if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'products',
-        fetch_format: 'auto',
-        quality: 'auto'
-      });
+    if (req.file && req.file.buffer) {
+      const result = await uploadToCloudinary(req.file.buffer, 'products');
       image = result.secure_url;
-      await deleteFileIfExists(req.file.path);
     } else if (req.body.image) {
       image = req.body.image;
+    }
+
+    if (!image) {
+      return res.status(400).json({ message: 'No image file provided' });
     }
 
     const product = new Product({ title, description, price, rating, image });
@@ -76,20 +78,18 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const updates = { ...req.body };
-    if (req.file) updates.image = req.file.path;
-
     const existing = await Product.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Product not found' });
 
-    const updated = await Product.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      { new: true, runValidators: true }
-    );
-
-    if (req.file && existing.image && existing.image !== updates.image) {
-      await deleteFileIfExists(existing.image);
+    if (req.file && req.file.buffer) {
+      const result = await uploadToCloudinary(req.file.buffer, 'products');
+      updates.image = result.secure_url;
     }
+
+    const updated = await Product.findByIdAndUpdate(req.params.id, updates, {
+      new: true,
+      runValidators: true
+    });
 
     res.json(updated);
   } catch (err) {
